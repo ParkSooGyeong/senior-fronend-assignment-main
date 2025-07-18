@@ -157,6 +157,9 @@ export const Message: React.FC<{ message: MessageType }> = memo(({ message }) =>
               __html: DOMPurify.sanitize(content),
             }}
             className="prose prose-sm max-w-none dark:prose-invert prose-gray"
+            style={{
+              color: 'inherit'
+            }}
           />
         );
       case 'json':

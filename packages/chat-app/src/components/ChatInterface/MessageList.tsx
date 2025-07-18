@@ -111,140 +111,45 @@ export const MessageList: React.FC<MessageListProps> = ({
 
   // 사용자가 맨 아래에 있는지 확인하는 상태
   const [isUserAtBottom, setIsUserAtBottom] = useState(true);
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
-  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
   const lastScrollTimeRef = useRef<number>(0);
-  const lastScrollHeightRef = useRef<number>(0);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastMessageCountRef = useRef<number>(0);
+  const wasStreamingRef = useRef(false);
 
-  // 스크롤 위치 모니터링 (throttled) - race condition 방지
-  const throttledScrollHandler = useThrottle((scrollTop: number, scrollHeight: number, clientHeight: number) => {
-    // auto-scroll 중에는 사용자 스크롤 감지 무시
-    if (isAutoScrolling) {
-      console.log('🚫 Ignoring scroll during auto-scroll');
-      return;
-    }
+  // 스크롤 위치 모니터링
+  const handleScroll = useCallback((scrollTop: number, scrollHeight?: number, clientHeight?: number) => {
+    if (!scrollHeight || !clientHeight) return;
 
-    const threshold = 100; // 100px 여유로 증가
+    const threshold = 50;
     const isAtBottom = scrollTop + clientHeight >= scrollHeight - threshold;
     
-    // 스크롤 높이가 변경되었을 때만 디버그 로그 출력
-    if (lastScrollHeightRef.current !== scrollHeight) {
-      console.log('📍 Scroll Position Debug:', {
-        scrollTop,
-        scrollHeight,
-        clientHeight,
-        threshold,
-        isAtBottom,
-        difference: scrollHeight - (scrollTop + clientHeight),
-        calculatedHeight: messages.length * ESTIMATED_MESSAGE_HEIGHT,
-        heightDifference: scrollHeight - (messages.length * ESTIMATED_MESSAGE_HEIGHT)
-      });
-      lastScrollHeightRef.current = scrollHeight;
-    }
-    
     setIsUserAtBottom(isAtBottom);
-    
-    // 사용자가 수동으로 스크롤했을 때는 auto-scroll 잠시 비활성화
-    if (!isAtBottom && !isAutoScrolling) {
-      setShouldAutoScroll(false);
-    }
-  }, 250); // 더 긴 간격으로 throttle
+  }, []);
 
-  const handleScroll = useCallback((scrollTop: number, scrollHeight?: number, clientHeight?: number) => {
-    if (scrollHeight && clientHeight) {
-      throttledScrollHandler(scrollTop, scrollHeight, clientHeight);
-    }
-  }, [throttledScrollHandler, isAutoScrolling]);
-
-  // 자동 스크롤 함수 (race condition 방지)
+  // 자동 스크롤 함수
   const scrollToBottom = useCallback(() => {
     if (!virtualScrollerRef.current) return;
     
     const now = Date.now();
-    if (now - lastScrollTimeRef.current < 500) { // 500ms로 줄임
-      return;
-    }
+    if (now - lastScrollTimeRef.current < 200) return;
     
-    // 이전 타임아웃이 있다면 취소
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
-    }
-    
-    setIsAutoScrolling(true);
     lastScrollTimeRef.current = now;
-    console.log('🚀 Starting auto-scroll');
-    
     virtualScrollerRef.current.scrollToBottom();
+  }, []);
+
+  // 메시지 변화 감지 및 자동 스크롤
+  useEffect(() => {
+    const messageCountChanged = messages.length > lastMessageCountRef.current;
+    const streamingChanged = wasStreamingRef.current !== isStreaming;
+    const streamingEnded = wasStreamingRef.current && !isStreaming;
     
-    // auto-scroll 완료 후 플래그 해제
-    scrollTimeoutRef.current = setTimeout(() => {
-      setIsAutoScrolling(false);
-      console.log('✅ Auto-scroll completed');
-      
-      // 스크롤이 완료된 후 정확한 위치로 이동
-      setTimeout(() => {
-        if (virtualScrollerRef.current?.containerRef.current) {
-          const container = virtualScrollerRef.current.containerRef.current;
-          container.scrollTop = container.scrollHeight;
-          setIsUserAtBottom(true);
-          setShouldAutoScroll(true);
-        }
-      }, 100);
-    }, 300);
-  }, []);
-
-  // 디바운스된 자동 스크롤
-  const debouncedScrollToBottom = useDebounce(scrollToBottom, 50); // 더 빠른 응답
-
-  // 통합된 자동 스크롤 로직
-  useEffect(() => {
-    const shouldScroll = 
-      messages.length > 0 && 
-      !searchQuery && 
-      shouldAutoScroll && 
-      isUserAtBottom &&
-      !isAutoScrolling;
-
-    if (shouldScroll) {
-      console.log('🎯 Triggering auto-scroll', {
-        messageCount: messages.length,
-        isStreaming,
-        shouldAutoScroll,
-        isUserAtBottom,
-        isAutoScrolling
-      });
-      debouncedScrollToBottom();
+    // 새 메시지가 추가되었거나 스트리밍이 끝났을 때 스크롤
+    if ((messageCountChanged || streamingEnded) && isUserAtBottom) {
+      setTimeout(scrollToBottom, 50);
     }
-  }, [messages.length, isStreaming, searchQuery, shouldAutoScroll, isUserAtBottom, isAutoScrolling, debouncedScrollToBottom]);
-
-  // 스트리밍이 끝났을 때 자동으로 스크롤
-  useEffect(() => {
-    if (!isStreaming && messages.length > 0 && shouldAutoScroll) {
-      setTimeout(() => {
-        if (virtualScrollerRef.current?.containerRef.current) {
-          const container = virtualScrollerRef.current.containerRef.current;
-          container.scrollTop = container.scrollHeight;
-        }
-      }, 200);
-    }
-  }, [isStreaming, messages.length, shouldAutoScroll]);
-
-  // 컴포넌트 언마운트 시 타임아웃 정리
-  useEffect(() => {
-    return () => {
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  // 사용자가 맨 아래에 있으면 auto-scroll 재활성화
-  useEffect(() => {
-    if (isUserAtBottom && !isAutoScrolling) {
-      setShouldAutoScroll(true);
-    }
-  }, [isUserAtBottom, isAutoScrolling]);
+    
+    lastMessageCountRef.current = messages.length;
+    wasStreamingRef.current = isStreaming;
+  }, [messages.length, isStreaming, isUserAtBottom, scrollToBottom]);
 
   const renderMessage = useCallback((message: MessageType, index: number) => (
     <MessageItem
