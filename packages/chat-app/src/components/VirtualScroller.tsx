@@ -15,11 +15,12 @@ export interface VirtualScrollerRef {
   scrollToBottom: () => void;
   scrollToTop: () => void;
   scrollToIndex: (index: number) => void;
+  containerRef: React.RefObject<HTMLDivElement>;
 }
 
 export const VirtualScroller = forwardRef<VirtualScrollerRef, VirtualScrollerProps<any>>(function VirtualScroller<T>({
   items,
-  itemHeight,
+  itemHeight: defaultItemHeight,
   overscan = 3,
   renderItem,
   className = '',
@@ -38,25 +39,25 @@ export const VirtualScroller = forwardRef<VirtualScrollerRef, VirtualScrollerPro
     };
 
     window.addEventListener('resize', handleResize);
+    handleResize();
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  useEffect(() => {
-    if (containerRef.current) {
-      setContainerHeight(containerRef.current.clientHeight);
-    }
-  }, []);
-
   const calculateVisibleRange = useCallback(() => {
-    const startIndex = Math.floor(scrollTop / itemHeight);
+    const itemsPerPage = Math.ceil(containerHeight / defaultItemHeight);
+    const startIndex = Math.max(0, Math.floor(scrollTop / defaultItemHeight) - overscan);
     const endIndex = Math.min(
-      startIndex + Math.ceil(containerHeight / itemHeight) + 1,
-      items.length - 1
+      items.length,
+      Math.ceil((scrollTop + containerHeight) / defaultItemHeight) + overscan
     );
-    return { startIndex, endIndex };
-  }, [scrollTop, itemHeight, containerHeight, items.length]);
 
-  // 스크롤 이벤트 핸들러 최적화
+    return {
+      startIndex,
+      endIndex,
+      itemsPerPage
+    };
+  }, [scrollTop, containerHeight, defaultItemHeight, items.length, overscan]);
+
   const throttledOnScroll = useThrottle((scrollTop: number, scrollHeight: number, clientHeight: number) => {
     onScroll?.(scrollTop, scrollHeight, clientHeight);
   }, 100);
@@ -68,32 +69,17 @@ export const VirtualScroller = forwardRef<VirtualScrollerRef, VirtualScrollerPro
     throttledOnScroll(scrollTop, scrollHeight, clientHeight);
   }, [throttledOnScroll]);
 
-  // Throttle visible items change callback
-  const throttledVisibleItemsChange = useThrottle((startIndex: number) => {
-    onItemVisible?.(startIndex);
-  }, 200);
-
-  const handleVisibleItemsChange = useCallback(() => {
-    const { startIndex } = calculateVisibleRange();
-    throttledVisibleItemsChange(startIndex);
-  }, [calculateVisibleRange, throttledVisibleItemsChange]);
-
-  useEffect(() => {
-    handleVisibleItemsChange();
-  }, [handleVisibleItemsChange]);
-
   const { startIndex, endIndex } = calculateVisibleRange();
-  const visibleItems = items.slice(startIndex, endIndex + 1);
+  const visibleItems = items.slice(startIndex, endIndex);
+  const totalHeight = items.length * defaultItemHeight;
 
-  const offsetY = startIndex * itemHeight;
-  const totalHeight = items.length * itemHeight;
-
-  // ref를 통해 스크롤 제어 메서드 노출
   useImperativeHandle(ref, () => ({
     scrollToBottom: () => {
       if (containerRef.current) {
+        const { scrollHeight, clientHeight } = containerRef.current;
+        const maxScrollTop = scrollHeight - clientHeight;
         containerRef.current.scrollTo({
-          top: totalHeight,
+          top: maxScrollTop,
           behavior: 'smooth'
         });
       }
@@ -108,14 +94,15 @@ export const VirtualScroller = forwardRef<VirtualScrollerRef, VirtualScrollerPro
     },
     scrollToIndex: (index: number) => {
       if (containerRef.current) {
-        const targetScrollTop = index * itemHeight;
+        const targetScrollTop = index * defaultItemHeight;
         containerRef.current.scrollTo({
           top: targetScrollTop,
           behavior: 'smooth'
         });
       }
-    }
-  }), [totalHeight, itemHeight]);
+    },
+    containerRef
+  }), [defaultItemHeight]);
 
   return (
     <div
@@ -128,24 +115,21 @@ export const VirtualScroller = forwardRef<VirtualScrollerRef, VirtualScrollerPro
         backfaceVisibility: 'hidden'
       }}
     >
-      <div
-        style={{
-          height: totalHeight,
-          position: 'relative',
-        }}
-      >
+      <div style={{ height: totalHeight, position: 'relative' }}>
         <div
           style={{
             position: 'absolute',
             top: 0,
             left: 0,
             right: 0,
-            transform: `translateY(${offsetY}px)`,
+            transform: `translateY(${startIndex * defaultItemHeight}px)`,
           }}
         >
-          {visibleItems.map((item, index) =>
-            renderItem(item, startIndex + index)
-          )}
+          {visibleItems.map((item, index) => (
+            <div key={startIndex + index}>
+              {renderItem(item, startIndex + index)}
+            </div>
+          ))}
         </div>
       </div>
     </div>

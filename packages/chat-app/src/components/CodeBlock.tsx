@@ -29,18 +29,20 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
   };
 
   return (
-    <div className="relative group">
-      <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+    <div className="relative group code-block-container">
+      {/* Copy button - positioned absolute to prevent layout shifts */}
+      <div className="absolute right-2 top-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
         <button
           onClick={handleCopy}
           className={`
-            px-2 py-1 rounded text-sm
+            px-2 py-1 rounded text-sm backdrop-blur-sm
             ${isDark
-              ? 'bg-gray-700 hover:bg-gray-600 text-gray-200'
-              : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+              ? 'bg-gray-700/90 hover:bg-gray-600/90 text-gray-200'
+              : 'bg-gray-200/90 hover:bg-gray-300/90 text-gray-700'
             }
-            transition-colors
+            transition-colors shadow-sm border border-gray-300/50 dark:border-gray-600/50
           `}
+          style={{ minWidth: '60px', minHeight: '28px' }}
           aria-label={isCopied ? '복사됨' : '코드 복사'}
         >
           {isCopied ? (
@@ -75,6 +77,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           )}
         </button>
       </div>
+      
       <SyntaxHighlighter
         language={language}
         style={isDark ? oneDark : oneLight}
@@ -84,6 +87,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
           margin: 0,
           borderRadius: '0.5rem',
           fontSize: '0.875rem',
+          paddingRight: '80px', // Reserve space for copy button
         }}
       >
         {code}

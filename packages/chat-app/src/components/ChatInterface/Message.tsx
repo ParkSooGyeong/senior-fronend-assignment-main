@@ -210,7 +210,7 @@ export const Message: React.FC<{ message: MessageType }> = memo(({ message }) =>
 
   return (
     <div 
-      className={`group py-6 px-4 ${isUser ? '' : 'bg-gray-50 dark:bg-gray-800/50'}`}
+      className={`group relative py-6 px-4 message-container ${isUser ? '' : 'bg-gray-50 dark:bg-gray-800/50'}`}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
       {...getA11yProps(message.role)}
@@ -235,7 +235,7 @@ export const Message: React.FC<{ message: MessageType }> = memo(({ message }) =>
           </div>
 
           {/* 메시지 내용 */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0" style={{ position: 'relative' }}>
             <div className="flex items-center gap-2 mb-2">
               <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
                 {isUser ? '사용자' : 'AI 어시스턴트'}
@@ -253,15 +253,16 @@ export const Message: React.FC<{ message: MessageType }> = memo(({ message }) =>
               )}
             </div>
             
-            <div className="text-gray-900 dark:text-gray-100">
+            {/* 메시지 콘텐츠 컨테이너 - 고정 영역 예약 */}
+            <div className="text-gray-900 dark:text-gray-100" style={{ minHeight: isEditing ? '120px' : '20px' }}>
               {renderContent()}
             </div>
             
             {renderStatus()}
 
-            {/* 액션 버튼들 */}
+            {/* 액션 버튼들 - absolute positioning으로 레이아웃에 영향 없게 처리 */}
             {!isStreaming && message.status === MessageStatus.Sent && (showActions || isEditing) && (
-              <div className="flex items-center gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute top-4 right-4 z-10 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 px-2 py-1 hover-actions">
                 <button
                   onClick={() => setIsEditing(!isEditing)}
                   className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"

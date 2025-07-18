@@ -49,17 +49,38 @@ html, body, #root {
   backface-visibility: hidden;
   perspective: 1000px;
   will-change: scroll-position;
+  contain: layout style paint;
 }
 
 .message-item {
   contain: layout style paint;
   will-change: transform;
+  /* 고정 최소 높이로 reflow 방지 */
+  min-height: 100px;
 }
 
 /* 애니메이션 성능 최적화 */
 .transition-all {
   transition-property: transform, opacity;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 코드 블록 컨테이너 최적화 */
+.code-block-container {
+  contain: layout style paint;
+  will-change: auto;
+}
+
+/* 호버 효과 최적화 - 레이아웃 변경 방지 */
+.hover-actions {
+  contain: layout style paint;
+  will-change: opacity;
+}
+
+/* 메시지 컨테이너 최적화 */
+.message-container {
+  contain: layout style paint;
+  transform: translateZ(0);
 }
 
 /* 코드 블록 스타일링 */
