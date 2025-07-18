@@ -102,7 +102,7 @@ export const useIntersectionObserver = (
 };
 
 export const useMemoizedValue = <T>(value: T, delay: number = 500) => {
-  const ref = useRef<T>(value);
+  const [memoizedValue, setMemoizedValue] = useState<T>(value);
   const timeoutRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
@@ -111,7 +111,7 @@ export const useMemoizedValue = <T>(value: T, delay: number = 500) => {
     }
 
     timeoutRef.current = setTimeout(() => {
-      ref.current = value;
+      setMemoizedValue(value);
     }, delay);
 
     return () => {
@@ -121,5 +121,5 @@ export const useMemoizedValue = <T>(value: T, delay: number = 500) => {
     };
   }, [value, delay]);
 
-  return ref.current;
+  return memoizedValue;
 }; 

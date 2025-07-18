@@ -1,4 +1,4 @@
-import React, { useState, memo } from 'react';
+import React, { useState, memo, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import DOMPurify from 'dompurify';
 import { Message as MessageType, MessageRole, MessageStatus } from '../../types/chat';
@@ -125,7 +125,7 @@ export const Message: React.FC<{ message: MessageType }> = memo(({ message }) =>
     isStreaming,
   });
 
-  const renderContent = () => {
+  const renderContent = useCallback(() => {
     if (isEditing) {
       return (
         <MessageEditor
@@ -135,12 +135,18 @@ export const Message: React.FC<{ message: MessageType }> = memo(({ message }) =>
       );
     }
 
+    const content = typeof memoizedContent === 'string' ? memoizedContent : String(memoizedContent);
+
     switch (message.contentType) {
       case 'markdown':
         return (
           <div className="prose prose-sm max-w-none dark:prose-invert prose-gray">
-            <ReactMarkdown components={MarkdownComponents}>
-              {memoizedContent}
+            <ReactMarkdown
+              components={MarkdownComponents}
+              skipHtml
+              remarkPlugins={[]}
+            >
+              {content}
             </ReactMarkdown>
           </div>
         );
@@ -148,7 +154,7 @@ export const Message: React.FC<{ message: MessageType }> = memo(({ message }) =>
         return (
           <div
             dangerouslySetInnerHTML={{
-              __html: DOMPurify.sanitize(memoizedContent),
+              __html: DOMPurify.sanitize(content),
             }}
             className="prose prose-sm max-w-none dark:prose-invert prose-gray"
           />
@@ -157,24 +163,24 @@ export const Message: React.FC<{ message: MessageType }> = memo(({ message }) =>
         try {
           return (
             <CodeBlock
-              code={JSON.stringify(JSON.parse(memoizedContent), null, 2)}
+              code={JSON.stringify(JSON.parse(content), null, 2)}
               language="json"
               showLineNumbers={false}
             />
           );
         } catch {
-          return <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg overflow-x-auto text-sm">{memoizedContent}</pre>;
+          return <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg overflow-x-auto text-sm">{content}</pre>;
         }
       default:
         return (
           <div className="text-gray-900 dark:text-gray-100 whitespace-pre-wrap leading-relaxed">
-            {memoizedContent}
+            {content}
           </div>
         );
     }
-  };
+  }, [isEditing, message, memoizedContent]);
 
-  const renderStatus = () => {
+  const renderStatus = useCallback(() => {
     switch (message.status) {
       case MessageStatus.Sending:
         return (
@@ -206,7 +212,10 @@ export const Message: React.FC<{ message: MessageType }> = memo(({ message }) =>
       default:
         return null;
     }
-  };
+  }, [message.status, message.error, regenerateResponse]);
+
+  const messageContent = useMemo(() => renderContent(), [renderContent]);
+  const messageStatus = useMemo(() => renderStatus(), [renderStatus]);
 
   return (
     <div 
@@ -235,7 +244,7 @@ export const Message: React.FC<{ message: MessageType }> = memo(({ message }) =>
           </div>
 
           {/* 메시지 내용 */}
-          <div className="flex-1 min-w-0" style={{ position: 'relative' }}>
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
               <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
                 {isUser ? '사용자' : 'AI 어시스턴트'}
@@ -248,61 +257,22 @@ export const Message: React.FC<{ message: MessageType }> = memo(({ message }) =>
               </span>
               {message.contentType !== 'text' && (
                 <span className="px-2 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full">
-                  {message.contentType.toUpperCase()}
+                  {message.contentType}
                 </span>
               )}
             </div>
-            
-            {/* 메시지 콘텐츠 컨테이너 - 고정 영역 예약 */}
-            <div className="text-gray-900 dark:text-gray-100" style={{ minHeight: isEditing ? '120px' : '20px' }}>
-              {renderContent()}
-            </div>
-            
-            {renderStatus()}
-
-            {/* 액션 버튼들 - absolute positioning으로 레이아웃에 영향 없게 처리 */}
-            {!isStreaming && message.status === MessageStatus.Sent && (showActions || isEditing) && (
-              <div className="absolute top-4 right-4 z-10 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 dark:border-gray-600 px-2 py-1 hover-actions">
-                <button
-                  onClick={() => setIsEditing(!isEditing)}
-                  className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                  aria-label={isEditing ? '편집 취소' : '메시지 편집'}
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  {isEditing ? '취소' : '편집'}
-                </button>
-                
-                {!isUser && (
-                  <button
-                    onClick={() => regenerateResponse()}
-                    disabled={isStreaming}
-                    className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-50"
-                    aria-label="응답 재생성"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    재생성
-                  </button>
-                )}
-
-                <button
-                  onClick={() => navigator.clipboard.writeText(message.content)}
-                  className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
-                  aria-label="메시지 복사"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                  복사
-                </button>
-              </div>
-            )}
+            {messageContent}
+            {messageStatus}
           </div>
         </div>
       </div>
     </div>
+  );
+}, (prevProps, nextProps) => {
+  // 메시지 내용이나 상태가 변경되었을 때만 리렌더링
+  return (
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.status === nextProps.message.status &&
+    prevProps.message.contentType === nextProps.message.contentType
   );
 }); 
